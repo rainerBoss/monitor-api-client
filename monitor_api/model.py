@@ -1,6 +1,7 @@
 import httpx
 import logging
 import json
+from typing import Union, List, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -12,10 +13,10 @@ class MonitorAPIException(Exception):
         super().__init__(message)
 
     def __repr__(self) -> str:
-        return f"{self.message}: status `{self.status}` content `{self.content}`"
+        return f"[{self.__class__.__name__}] {self.message}: status `{self.status}` content `{self.content}`"
 
     def __str__(self) -> str:
-        return f"{self.message}: status `{self.status}` content `{self.content}`"
+        return f"[{self.__class__.__name__}] {self.message}: status `{self.status}` content `{self.content}`"
 
 
 class MonitorAPI:
@@ -28,54 +29,52 @@ class MonitorAPI:
         self.language_code = language_code
         self.api_version = api_version
         self.force_relogin = force_relogin
-        self.session_id = None
 
         self.client = httpx.Client(verify=False, timeout=5)
+        self.session_id = self.get_latest_session_id()
 
     @property
     def base_url(self):
         return f"https://{self.host}:{self.port}/{self.language_code}/{self.company_number}"
 
-    def log_response(self, data, name="response"):
-        with open(f"logs/{name}.json", "w", encoding="utf-8") as file:
-            file.write(json.dumps(data, indent=4, ensure_ascii=False))
-
-    def handle_request(self, request: httpx.Request) -> httpx.Response:
+    def handle_request(self, request: httpx.Request, retry_auth: bool=True) -> Union[List, Dict, str]:
+        logger.debug(f"Making a `{request.method}` request to `{request.url}` with headers `{request.headers}` and content `{request.content}`")
         try:
             response = self.client.send(request)
         except (httpx.ConnectTimeout) as e:
             raise MonitorAPIException("Connection timeout")
         except (httpx.ConnectError) as e:
             raise MonitorAPIException("Connection error")
-        else:
-            return response
-
-    def handle_response(self, r: httpx.Response):
         try:
-            data = r.json()
+            data = response.json()
         except json.decoder.JSONDecodeError as e:
-            data = r.text
-        finally:
-            self.log_response(data, r.status_code)
-        if r.status_code == 200:
+            data = response.text
+        logger.debug(f"Received response with status `{response.status_code}` and data `{data}`")
+        if response.status_code == 200:
             return data
-        elif r.status_code == 400:
-            raise MonitorAPIException("Bad request", status=r.status_code, content=data)
-        elif r.status_code == 401:
-            raise MonitorAPIException("Unauthorized", status=r.status_code, content=data)
-        elif r.status_code == 403:
-            raise MonitorAPIException("Forbidden", status=r.status_code, content=data)
-        elif r.status_code == 404:
-            raise MonitorAPIException("Query/Command not found", status=r.status_code, content=data)
-        elif r.status_code == 409:
-            raise MonitorAPIException("Command conflict", status=r.status_code, content=data)
-        elif r.status_code == 500:
-            raise MonitorAPIException("Server error", status=r.status_code, content=data)
+        elif response.status_code == 400:
+            raise MonitorAPIException("Bad request", status=response.status_code, content=data)
+        elif response.status_code == 401:
+            if retry_auth:
+                logger.debug("Attempting to authenticate...")
+                request.headers["X-Monitor-SessionId"] = self.get_latest_session_id()
+                logger.debug("Resending the request...")
+                return self.handle_request(request, retry_auth=False)
+            else:
+                raise MonitorAPIException("Unauthorized", status=response.status_code, content=data)
+        elif response.status_code == 403:
+            raise MonitorAPIException("Forbidden", status=response.status_code, content=data)
+        elif response.status_code == 404:
+            raise MonitorAPIException("Query/Command not found", status=response.status_code, content=data)
+        elif response.status_code == 409:
+            raise MonitorAPIException("Command conflict", status=response.status_code, content=data)
+        elif response.status_code == 500:
+            raise MonitorAPIException("Server error", status=response.status_code, content=data)
         else:
-            raise MonitorAPIException("Unexpected error", status=r.status_code, content=data)
+            raise MonitorAPIException("Unexpected error", status=response.status_code, content=data)
 
-    def authenticate(self):
-        response = self.handle_request(httpx.Request(
+    def get_latest_session_id(self):
+        data = self.handle_request(httpx.Request(
             method="POST",
             url=f"{self.base_url}/login",
             json={
@@ -84,27 +83,25 @@ class MonitorAPI:
                 "ForceRelogin": self.force_relogin,
             }
         ))
-        data = self.handle_response(response)
-        if self.force_relogin:
-            self.session_id = data["SessionId"]
+        if data["SessionSuspended"]:
+            session_id = data["ActiveSessions"][0]["SessionIdentifier"]
         else:
-            if data["ActiveSessions"]:
-                self.session_id = data["ActiveSessions"][0]["SessionIdentifier"]
-        return data
+            session_id = data["SessionId"]
+        logger.debug(f"Fetched sessionid `{session_id}`")
+        return session_id
     
     def query(self, query: str):
-        response = self.handle_request(httpx.Request(
+        data= self.handle_request(httpx.Request(
             method="GET",
             url=f"{self.base_url}/api/{self.api_version}/{query}",
             headers={
                 "X-Monitor-SessionId": f"{self.session_id}"
             }
         ))
-        data = self.handle_response(response)
         return data
 
     def command(self, command: str, body=None):
-        response = self.handle_request(httpx.Request(
+        data = self.handle_request(httpx.Request(
             method="POST",
             url=f"{self.base_url}/api/{self.api_version}/{command}",
             headers={
@@ -112,5 +109,4 @@ class MonitorAPI:
             },
             json=body,
         ))
-        data = self.handle_response(response)
         return data
