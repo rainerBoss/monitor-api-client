@@ -11,8 +11,6 @@ m1 = MonitorAPI(
     host=os.environ["MONITOR_API_HOST"],
 )
 
-m1.authenticate()
-
 data = m1.query("Common/RejectionCodeItems")
 print(data)
 
