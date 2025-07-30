@@ -1,32 +1,26 @@
-# Monitor API
-
-## Basic wrapper around Monitor ERP API
+# Monitor API Client
 
 ---
 
-## Setup
-
-### Install requirements with:
+### Example:
 <div class="termy">
 
 ```console
-$ pip install -r requirements.txt
+from monitor_api_client import MonitorAPIClient
 
-```
-</div>
+client = MonitorAPIClient(
+    company_number="000.0",
+    username="Username",
+    password="Password",
+    host="192.168.0.1"
+)
 
-### Create .env and provide:
+r = await client.query(
+    module="Inventory",
+    entity="Parts",
+    id=1,
+)
 
-- MONITOR_API_COMAPNY_NUMBER
-- MONITOR_API_USERNAME
-- MONITOR_API_PASSWORD
-- MONITOR_API_HOST
-
-### Run an example:
-<div class="termy">
-
-```console
-$ python -m examples.basic
 ```
 
 </div>

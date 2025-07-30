@@ -9,7 +9,7 @@ class MonitorApiException(Exception):
     pass
 
 class MonitorAPIClient:
-    def __init__(self, company_number: str, username: str, password: str, host: str, port: int=8001, language_code: str="en", api_version: str="v1", force_relogin: bool=False) -> None:
+    def __init__(self, company_number: str, username: str, password: str, host: str, port: int=8001, language_code: str="en", api_version: str="v1", force_relogin: bool=False, timeout: int = 10) -> None:
         self.port = port
         self.host = host
         self.company_number = company_number
@@ -18,8 +18,7 @@ class MonitorAPIClient:
         self.default_language_code = language_code
         self.api_version = api_version
         self.force_relogin = force_relogin
-
-        self.client = httpx.Client(verify=False, timeout=5)
+        self.timeout = timeout
         self.session_id = ""
     
     @property
@@ -29,7 +28,7 @@ class MonitorAPIClient:
     async def handle_request(self, request: httpx.Request) -> httpx.Response:
         http_error = None
         try:
-            async with httpx.AsyncClient(timeout=20, verify=False) as client:
+            async with httpx.AsyncClient(timeout=self.timeout, verify=False) as client:
                 request.headers["X-Monitor-SessionId"] = self.session_id
                 response = await client.send(request)
         except (httpx.HTTPError) as e:

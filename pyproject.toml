@@ -1,15 +1,25 @@
 [project]
 name = "monitor-api-client"
-version = "0.0.2"
-description = "Add your description here"
+authors = [
+    { name="rainerBoss"}
+]
+version = "1.0.0"
+description = "Client for calling Monitor API"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.9"
 dependencies = [
     "httpx>=0.28.1",
 ]
+license = { file = "LICENSE.txt" }
 
 [dependency-groups]
 dev = [
+    "dotenv>=0.9.9",
     "mypy>=1.17.0",
+    "pytest>=8.4.1",
     "ruff>=0.12.7",
 ]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
