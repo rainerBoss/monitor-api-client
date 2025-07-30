@@ -3,10 +3,10 @@ name = "monitor-api-client"
 authors = [
     { name="rainerBoss"}
 ]
-version = "1.0.0"
+version = "0.1.0"
 description = "Client for calling Monitor API"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "httpx>=0.28.1",
 ]
