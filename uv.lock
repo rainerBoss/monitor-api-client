@@ -114,7 +114,7 @@ wheels = [
 ]
 
 [[package]]
-name = "monitor-api-client"
+name = "monitor-erp-api-client"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

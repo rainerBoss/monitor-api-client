@@ -1,6 +1,6 @@
 import os
 import asyncio
-from monitor_api_client import MonitorAPIClient
+from monitor.client import MonitorClient
 import logging
 import sys
 from dotenv import load_dotenv
@@ -18,11 +18,11 @@ handler.setFormatter(formatter)
 root.addHandler(handler)
 
 async def examle() -> None:
-    client = MonitorAPIClient(
+    client = MonitorClient(
         company_number=os.environ["COMPANY_NUMBER"],
         username=os.environ["API_USERNAME"],
         password=os.environ["API_PASSWORD"],
-        host=os.environ["API_HOST"],
+        base_url=os.environ["API_BASE_URL"],
     )
     r = await client.query(
         module="Inventory",

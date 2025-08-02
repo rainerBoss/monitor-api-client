@@ -1,5 +1,5 @@
 [project]
-name = "monitor-api-client"
+name = "monitor-erp-api-client"
 authors = [
     { name="rainerBoss"}
 ]
