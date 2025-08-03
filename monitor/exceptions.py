@@ -50,7 +50,7 @@ class CommandConflict(CommandError):
     pass
 
 
-class BatchCommandError(Base):
+class BatchCommandError(CommandError):
     pass
 
 
@@ -58,13 +58,13 @@ class QueryError(Base):
     pass
 
 
-class QueryEntityNotFound(Base):
+class QueryEntityNotFound(QueryError):
     pass
 
 
-class QueryInvalidId(Base):
+class QueryInvalidId(QueryError):
     pass
 
 
-class QueryInvalidFilter(Base):
+class QueryInvalidFilter(QueryError):
     pass

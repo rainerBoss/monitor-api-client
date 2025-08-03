@@ -28,10 +28,9 @@ class MonitorClient:
 
         self.language_code = language_code
         self.api_version = api_version
-        self.timeout = timeout
         self.x_monitor_session_id = ""
         
-        self.async_http_client = httpx.AsyncClient()
+        self.async_http_client = httpx.AsyncClient(timeout=timeout)
 
     async def send_logged_request(self, request: httpx.Request) -> httpx.Response:
         response = None
@@ -123,7 +122,7 @@ class MonitorClient:
         orderby: str | None = None,
         top: str | None = None,
         skip: str | None = None
-        ) -> httpx.Request:
+    ) -> httpx.Request:
         if not language:
             language = self.language_code
 
@@ -157,10 +156,9 @@ class MonitorClient:
         orderby: str | None = None,
         top: str | None = None,
         skip: str | None = None
-        ) -> Any:
+    ) -> Any:
         request = self._create_query_request(module, entity, id, language, filter, select, expand, orderby, top, skip)
         response = await self.send_request_with_retry(request)
-        
         if response.is_success:
             return response.json()
         else:
@@ -172,7 +170,7 @@ class MonitorClient:
         command: str,
         language: str | None = None,
         body: Any| None = None
-        ) -> httpx.Request:
+    ) -> httpx.Request:
         if not language:
             language = self.language_code
 
@@ -189,7 +187,7 @@ class MonitorClient:
         command: str,
         language: str | None = None,
         body: Any | None = None
-        ) -> Any:
+    ) -> Any:
         request = self._create_command_request(module, namespace, command, language, body)
         response = await self.send_request_with_retry(request)
         if response.is_success:
@@ -197,11 +195,10 @@ class MonitorClient:
         else:
             self.handle_error_response(response, type=RequestType.COMMAND)
 
-    async def batch(self,
+    def _create_batch_request(self,
         commands: list[dict[str, Any]],
         language: str | None = None
-        ) -> Any:
-
+    ) -> Any:
         if not language:
             language = self.language_code
 
@@ -210,8 +207,14 @@ class MonitorClient:
             url=f"{self.base_url}/{language}/{self.company_number}/api/{self.api_version}/Batch",
             json=commands,
         )
+        return request
+    
+    async def batch(self,
+        commands: list[dict[str, Any]],
+        language: str | None = None
+    ) -> Any:
+        request = self._create_batch_request(commands, language)
         response = await self.send_request_with_retry(request)
-        
         if response.is_success:
             return response.json()
         else:
