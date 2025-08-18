@@ -1,16 +1,13 @@
 import httpx
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, NoReturn
+from typing import Any
 from enum import Enum, auto
 from .import exceptions as exc
 
+
 logger = logging.getLogger(__name__)
 
-
-class RequestType(Enum):
-    QUERY = auto()
-    COMMAND = auto()
 
 class BaseMonitorClient(ABC):
     X_MONITOR_SESSION_ID_HEADER: str = "x-monitor-sessionid"
@@ -35,6 +32,23 @@ class BaseMonitorClient(ABC):
 
         self.timeout = timeout
 
+    def _log_request_response(self, request: httpx.Request, response: httpx.Response | None = None) -> None:
+        if response and response.is_error:
+            level = logging.WARNING
+        elif response:
+            level = logging.INFO
+        else:
+            level = logging.ERROR
+        logger.log(level, f"Request:")
+        logger.log(level, f"URL: {request.url}")
+        logger.log(level, f"Headers: {request.headers.items()}")
+        logger.log(level, f"Body: {request.content}")
+        if response:
+            logger.log(level, f"Response:")
+            logger.log(level, f"Status: {response.status_code}")
+            logger.log(level, f"Headers: {response.headers.items()}")
+            logger.log(level, f"Body: {response.content}")
+
     def _create_login_request(self) -> httpx.Request:
         request = httpx.Request(
             method="POST",
@@ -52,17 +66,17 @@ class BaseMonitorClient(ABC):
             data = response.json()
             if data["SessionSuspended"]:
                 logger.warning("Session suspended")
-                raise exc.SessionSuspended()
+                raise exc.SessionSuspended(response.text)
             else:
-                self.f = response.headers.get(self.X_MONITOR_SESSION_ID_HEADER)
+                self.x_monitor_session_id = response.headers.get(self.X_MONITOR_SESSION_ID_HEADER)
                 logger.debug(f"Refreshed session id: '{self.x_monitor_session_id}'")
                 return None
         else:
             logger.warning(f"Login failed with status '{response.status_code}'")
-            raise exc.LoginFailed()
+            raise exc.LoginFailed(response.text)
     
     def _refresh_auth_header(self, request: httpx.Request) -> httpx.Request:
-        request = request.headers[self.X_MONITOR_SESSION_ID_HEADER]
+        request.headers[self.X_MONITOR_SESSION_ID_HEADER] = self.x_monitor_session_id
         return request
 
     @abstractmethod
@@ -76,14 +90,14 @@ class BaseMonitorClient(ABC):
 
     def _general_error_response_handler(self, response: httpx.Response) -> httpx.Response:
         if response.status_code == 401:
-            raise exc.InvalidSessionId()
+            raise exc.InvalidSessionId(response.text)
         if response.status_code == 403:
             if response.text == "Monitor.API is not available for this system":
-                raise exc.ApiNotAvailable()
+                raise exc.ApiNotAvailable(response.text)
             else:
-                raise exc.SessionSuspended()
+                raise exc.SessionSuspended(response.text)
         if response.status_code == 500:
-            raise exc.UnhandledException()
+            raise exc.UnhandledException(response.text)
         return response
     
     def _needs_retry(self, response: httpx.Response) -> bool:
@@ -110,20 +124,21 @@ class BaseMonitorClient(ABC):
         else:
             _id = str(id)
 
+        params = {}
+        if filter: params["$filter"] = filter
+        if select: params["$select"] = select
+        if expand: params["$expand"] = expand
+        if orderby: params["$orderby"] = orderby
+        if top: params["$top"] = top
+        if skip: params["$skip"] = skip
+
         request = httpx.Request(
             method="GET",
             headers={
                 self.X_MONITOR_SESSION_ID_HEADER: self.x_monitor_session_id
             },
             url=f"{self.base_url}/{language}/{self.company_number}/api/{self.api_version}/{module}/{entity}/{_id}",
-            params={
-                "$filter": filter,
-                "$select": select,
-                "$expand": expand,
-                "$orderby": orderby,
-                "$top": top,
-                "$skip": skip,
-            }
+            params=params,
         )
         return request
     
@@ -156,19 +171,20 @@ class BaseMonitorClient(ABC):
         else:
             if response.status_code == 400:
                 if "Id" in response.text:
-                    raise exc.QueryInvalidId()
+                    raise exc.QueryInvalidId(response.text)
                 else:
-                    raise exc.QueryInvalidFilter()
+                    raise exc.QueryInvalidFilter(response.text)
             if response.status_code == 404:
-                raise exc.QueryEntityNotFound()
+                raise exc.QueryEntityNotFound(response.text)
             response = self._general_error_response_handler(response)
-            raise exc.QueryError()
+            raise exc.QueryError(response.text)
 
     def _create_command_request(self,
         module: str,
         namespace: str,
         command: str,
         body: Any| None = None,
+        many: bool = False,
         simulate: bool = False,
         validate: bool = False,
         language: str | None = None,
@@ -181,13 +197,18 @@ class BaseMonitorClient(ABC):
             sim_or_val = "/Simulate"
         if validate:
             sim_or_val = "/Validate"
+        
+        _many = ""
+        if many:
+            _many = "/Many"
+        
 
         request = httpx.Request(
             method="POST",
             headers={
                 self.X_MONITOR_SESSION_ID_HEADER: self.x_monitor_session_id
             },
-            url=f"{self.base_url}/{language}/{self.company_number}/api/{self.api_version}/{module}/{namespace}/{command}{sim_or_val}",
+            url=f"{self.base_url}/{language}/{self.company_number}/api/{self.api_version}/{module}/{namespace}/{command}{_many}{sim_or_val}",
             json=body,
         )
         return request
@@ -197,6 +218,7 @@ class BaseMonitorClient(ABC):
         module: str,
         namespace: str,
         command: str,
+        many: bool = False,
         simulate: bool = False,
         validate: bool = False,
         language: str | None = None,
@@ -218,16 +240,22 @@ class BaseMonitorClient(ABC):
 
     def _handle_command_response(self, response: httpx.Response) -> Any:
         if response.is_success:
-            return response.json()
+            if not response.content:
+                return None
+            else:
+                return response.json()
         else:
             if response.status_code == 400:
-                raise exc.CommandValidationFailure()
+                raise exc.CommandValidationFailure(response.text)
             if response.status_code == 404:
-                 raise exc.CommandEntityNotFound()
+                if "id" in response.text:
+                    raise exc.CommandEntityNotFound(response.text)
+                else:
+                    raise exc.CommandNotFound(response.text)
             if response.status_code == 409:
-                raise exc.CommandConflict()
+                raise exc.CommandConflict(response.text)
             response = self._general_error_response_handler(response)
-            raise exc.CommandError()
+            raise exc.CommandError(response.text)
 
     def _create_batch_request(self,
         commands: list[dict[str, Any]],
