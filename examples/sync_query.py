@@ -1,15 +1,15 @@
 import os
-import asyncio
-from monitor.sync_client import SyncMonitorClient
 import logging
 import sys
 from dotenv import load_dotenv
 
+from monitorapi.sync_client import SyncClient
+
+
 load_dotenv(".env")
 
-
-root = logging.getLogger("monitor")
-root.setLevel(logging.WARNING)
+root = logging.getLogger("monitor_erp_api_client")
+root.setLevel(logging.INFO)
 
 handler = logging.StreamHandler(sys.stdout)
 handler.setLevel(logging.DEBUG)
@@ -18,7 +18,7 @@ handler.setFormatter(formatter)
 root.addHandler(handler)
 
 def example() -> None:
-    client = SyncMonitorClient(
+    client = SyncClient(
         company_number=os.environ["API_COMPANY_NUMBER"],
         username=os.environ["API_USERNAME"],
         password=os.environ["API_PASSWORD"],
@@ -27,8 +27,7 @@ def example() -> None:
     r = client.query(
         module="Inventory",
         entity="Parts",
-        top=1,
-        language="lv",
+        id=1,
     )
     print(r)
 

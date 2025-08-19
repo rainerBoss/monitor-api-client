@@ -1,10 +1,10 @@
 [project]
-name = "monitor-erp-api-client"
+name = "monitor-api-client"
 authors = [
     { name="rainerBoss"}
 ]
-version = "0.1.0"
-description = "Client for calling Monitor API"
+version = "0.2.0"
+description = "Client for calling MonitorERP API"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -20,6 +20,5 @@ dev = [
     "ruff>=0.12.7",
 ]
 
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
+[tool.uv]
+package = true

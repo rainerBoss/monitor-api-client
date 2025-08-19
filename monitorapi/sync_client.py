@@ -1,21 +1,24 @@
 import httpx
 import logging
-import asyncio
+import time
 from typing import Any
 
-
-from .base import BaseMonitorClient
+from .base_client import BaseClient
 from .import exceptions as exc
+
 
 logger = logging.getLogger(__name__)
 
-class SyncMonitorClient(BaseMonitorClient):
+class SyncClient(BaseClient):
 
-    def __init__(self, company_number, username, password, base_url, language_code = "en", api_version = "v1", timeout = 10):
-        super().__init__(company_number, username, password, base_url, language_code, api_version, timeout)
-        self.client = httpx.Client(timeout=timeout)
+    def __init__(self, company_number, username, password, base_url, language_code = "en", api_version = "v1", x_monitor_session_id = None, timeout = 10):
+        super().__init__(company_number, username, password, base_url, language_code, api_version, x_monitor_session_id, timeout)
+        self.client = httpx.Client(timeout=timeout, verify=False)
+        self._login_happening = False
 
     def _handle_request(self, request: httpx.Request) -> httpx.Response:
+        while self._login_happening:
+            time.sleep(0.01)
         try:
             response = None
             request = self._refresh_auth_header(request)
@@ -29,16 +32,20 @@ class SyncMonitorClient(BaseMonitorClient):
 
     def login(self) -> None:
         self._login_happening = True
-        request = self._create_login_request()
         try:
             response = None
-            response = self.client.send(request)
-            self._handle_login_response(response)
-        except httpx.HTTPError as e:
-            http_error = e.__doc__.strip() if e.__doc__ else e.__class__.__name__
-            raise exc.RequestError(http_error)
+            request = self._create_login_request()
+            try:
+                response = self.client.send(request)
+                self._handle_login_response(response)
+            except httpx.HTTPError as e:
+                http_error = e.__doc__.strip() if e.__doc__ else e.__class__.__name__
+                raise exc.RequestError(http_error)
+        except Exception as e:
+            raise e
         finally:
             self._log_request_response(request, response)
+            self._login_happening = False
 
     def query(self,
         module: str,
@@ -49,7 +56,7 @@ class SyncMonitorClient(BaseMonitorClient):
         select: str | None = None,
         expand: str | None = None,
         orderby: str | None = None,
-        top: str | None = None,
+        top: int | None = None,
         skip: str | None = None
     ) -> Any:
         request = self._create_query_request(module, entity, id, language, filter, select, expand, orderby, top, skip)

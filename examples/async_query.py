@@ -1,14 +1,15 @@
 import os
 import asyncio
-from monitor.async_client import AsyncMonitorClient
 import logging
 import sys
 from dotenv import load_dotenv
 
+from monitorapi.async_client import AsyncClient
+
+
 load_dotenv(".env")
 
-
-root = logging.getLogger("monitor")
+root = logging.getLogger("monitor_erp_api_client")
 root.setLevel(logging.WARNING)
 
 handler = logging.StreamHandler(sys.stdout)
@@ -18,7 +19,7 @@ handler.setFormatter(formatter)
 root.addHandler(handler)
 
 async def examle() -> None:
-    client = AsyncMonitorClient(
+    client = AsyncClient(
         company_number=os.environ["API_COMPANY_NUMBER"],
         username=os.environ["API_USERNAME"],
         password=os.environ["API_PASSWORD"],
@@ -27,8 +28,7 @@ async def examle() -> None:
     r = await  client.query(
         module="Inventory",
         entity="Parts",
-        top=1,
-        language="lv",
+        id=1,
     )
     print(r)
 

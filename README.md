@@ -1,4 +1,4 @@
-# Monitor API Client
+# MonitorERP API Client
 
 ---
 
@@ -6,16 +6,16 @@
 <div class="termy">
 
 ```console
-from monitor_api_client import MonitorAPIClient
+from monitorapi import SyncClient
 
-client = MonitorAPIClient(
+client = SyncClient(
     company_number="000.0",
     username="Username",
     password="Password",
-    host="192.168.0.1"
+    base_url="https://192.168.0.1:8001"
 )
 
-r = await client.query(
+r = client.query(
     module="Inventory",
     entity="Parts",
     id=1,

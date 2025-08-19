@@ -2,15 +2,14 @@ import httpx
 import logging
 from abc import ABC, abstractmethod
 from typing import Any
-from enum import Enum, auto
 from .import exceptions as exc
 
 
 logger = logging.getLogger(__name__)
 
+X_MONITOR_SESSION_ID_HEADER = "x-monitor-sessionid"
 
-class BaseMonitorClient(ABC):
-    X_MONITOR_SESSION_ID_HEADER: str = "x-monitor-sessionid"
+class BaseClient(ABC):
 
     def __init__(self,
         company_number: str,
@@ -19,6 +18,7 @@ class BaseMonitorClient(ABC):
         base_url: str,
         language_code: str = "en",
         api_version: str = "v1",
+        x_monitor_session_id: str | None = None,
         timeout: int = 10
         ) -> None:
         self.company_number = company_number
@@ -28,26 +28,27 @@ class BaseMonitorClient(ABC):
 
         self.language_code = language_code
         self.api_version = api_version
-        self.x_monitor_session_id = ""
+        self.x_monitor_session_id = x_monitor_session_id if x_monitor_session_id else "no-session-id-provided"
 
         self.timeout = timeout
 
-    def _log_request_response(self, request: httpx.Request, response: httpx.Response | None = None) -> None:
+    @staticmethod
+    def _log_request_response(request: httpx.Request, response: httpx.Response | None = None) -> None:
         if response and response.is_error:
             level = logging.WARNING
         elif response:
             level = logging.INFO
         else:
             level = logging.ERROR
-        logger.log(level, f"Request:")
+        logger.log(level, "Request:")
         logger.log(level, f"URL: {request.url}")
         logger.log(level, f"Headers: {request.headers.items()}")
-        logger.log(level, f"Body: {request.content}")
+        logger.log(level, f"Body: {request.content!r}")
         if response:
-            logger.log(level, f"Response:")
+            logger.log(level, "Response:")
             logger.log(level, f"Status: {response.status_code}")
             logger.log(level, f"Headers: {response.headers.items()}")
-            logger.log(level, f"Body: {response.content}")
+            logger.log(level, f"Body: {response.content!r}")
 
     def _create_login_request(self) -> httpx.Request:
         request = httpx.Request(
@@ -68,7 +69,7 @@ class BaseMonitorClient(ABC):
                 logger.warning("Session suspended")
                 raise exc.SessionSuspended(response.text)
             else:
-                self.x_monitor_session_id = response.headers.get(self.X_MONITOR_SESSION_ID_HEADER)
+                self.x_monitor_session_id = response.headers.get(X_MONITOR_SESSION_ID_HEADER)
                 logger.debug(f"Refreshed session id: '{self.x_monitor_session_id}'")
                 return None
         else:
@@ -76,7 +77,7 @@ class BaseMonitorClient(ABC):
             raise exc.LoginFailed(response.text)
     
     def _refresh_auth_header(self, request: httpx.Request) -> httpx.Request:
-        request.headers[self.X_MONITOR_SESSION_ID_HEADER] = self.x_monitor_session_id
+        request.headers[X_MONITOR_SESSION_ID_HEADER] = self.x_monitor_session_id
         return request
 
     @abstractmethod
@@ -101,7 +102,8 @@ class BaseMonitorClient(ABC):
         return response
     
     def _needs_retry(self, response: httpx.Response) -> bool:
-        if response.status_code == 401: return True
+        if response.status_code == 401:
+            return True
         return False
 
     def _create_query_request(self,
@@ -113,29 +115,35 @@ class BaseMonitorClient(ABC):
         select: str | None = None,
         expand: str | None = None,
         orderby: str | None = None,
-        top: str | None = None,
+        top: int | None = None,
         skip: str | None = None
     ) -> httpx.Request:
         if not language:
             language = self.language_code
 
-        if not id:
+        if id is None:
             _id = ''
         else:
             _id = str(id)
 
-        params = {}
-        if filter: params["$filter"] = filter
-        if select: params["$select"] = select
-        if expand: params["$expand"] = expand
-        if orderby: params["$orderby"] = orderby
-        if top: params["$top"] = top
-        if skip: params["$skip"] = skip
+        params: dict[str, str] = {}
+        if filter is not None:
+            params["$filter"] = filter
+        if select is not None:
+            params["$select"] = select
+        if expand is not None:
+            params["$expand"] = expand
+        if orderby is not None:
+            params["$orderby"] = orderby
+        if top is not None:
+            params["$top"] = str(top)
+        if skip is not None:
+            params["$skip"] = skip
 
         request = httpx.Request(
             method="GET",
             headers={
-                self.X_MONITOR_SESSION_ID_HEADER: self.x_monitor_session_id
+                X_MONITOR_SESSION_ID_HEADER: self.x_monitor_session_id
             },
             url=f"{self.base_url}/{language}/{self.company_number}/api/{self.api_version}/{module}/{entity}/{_id}",
             params=params,
@@ -152,7 +160,7 @@ class BaseMonitorClient(ABC):
         select: str | None = None,
         expand: str | None = None,
         orderby: str | None = None,
-        top: str | None = None,
+        top: int | None = None,
         skip: str | None = None
     ) -> Any:
         """
@@ -183,7 +191,7 @@ class BaseMonitorClient(ABC):
         module: str,
         namespace: str,
         command: str,
-        body: Any| None = None,
+        body: Any | None = None,
         many: bool = False,
         simulate: bool = False,
         validate: bool = False,
@@ -193,20 +201,20 @@ class BaseMonitorClient(ABC):
             language = self.language_code
         
         sim_or_val = ""
-        if simulate:
+        if simulate is True:
             sim_or_val = "/Simulate"
-        if validate:
+        if validate is True:
             sim_or_val = "/Validate"
         
         _many = ""
-        if many:
+        if many is True:
             _many = "/Many"
         
 
         request = httpx.Request(
             method="POST",
             headers={
-                self.X_MONITOR_SESSION_ID_HEADER: self.x_monitor_session_id
+                X_MONITOR_SESSION_ID_HEADER: self.x_monitor_session_id
             },
             url=f"{self.base_url}/{language}/{self.company_number}/api/{self.api_version}/{module}/{namespace}/{command}{_many}{sim_or_val}",
             json=body,
@@ -267,7 +275,7 @@ class BaseMonitorClient(ABC):
         request = httpx.Request(
             method="POST",
             headers={
-                self.X_MONITOR_SESSION_ID_HEADER: self.x_monitor_session_id
+                X_MONITOR_SESSION_ID_HEADER: self.x_monitor_session_id
             },
             url=f"{self.base_url}/{language}/{self.company_number}/api/{self.api_version}/Batch",
             json=commands,

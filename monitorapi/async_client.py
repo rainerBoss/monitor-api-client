@@ -3,17 +3,17 @@ import logging
 import asyncio
 from typing import Any
 
-
-from .base import BaseMonitorClient
+from .base_client import BaseClient
 from .import exceptions as exc
+
 
 logger = logging.getLogger(__name__)
 
-class AsyncMonitorClient(BaseMonitorClient):
+class AsyncClient(BaseClient):
 
-    def __init__(self, company_number, username, password, base_url, language_code = "en", api_version = "v1", timeout = 10):
-        super().__init__(company_number, username, password, base_url, language_code, api_version, timeout)
-        self.client = httpx.AsyncClient(timeout=timeout)
+    def __init__(self, company_number, username, password, base_url, language_code = "en", api_version = "v1", x_monitor_session_id = None, timeout = 10):
+        super().__init__(company_number, username, password, base_url, language_code, api_version, x_monitor_session_id, timeout)
+        self.client = httpx.AsyncClient(timeout=timeout, verify=False)
         self._condition = asyncio.Condition()
         self._login_happening = False
 
@@ -32,26 +32,25 @@ class AsyncMonitorClient(BaseMonitorClient):
         finally:
             self._log_request_response(request, response)
 
-    async def login(self) -> None:
+    async def login(self):
         self._login_happening = True
-        request = self._create_login_request()
         try:
             response = None
-            response = await self.client.send(request)
+            request = self._create_login_request()
             try:
+                response = await self.client.send(request)
                 self._handle_login_response(response)
-            except Exception as e:
-                raise e
-            finally:
-                async with self._condition:
-                    self._login_happening = False
-                    self._condition.notify_all()
-
-        except httpx.HTTPError as e:
-            http_error = e.__doc__.strip() if e.__doc__ else e.__class__.__name__
-            raise exc.RequestError(http_error)
+            except httpx.HTTPError as e:
+                http_error = e.__doc__.strip() if e.__doc__ else e.__class__.__name__
+                raise exc.RequestError(http_error)
+        except Exception as e:
+            raise e
         finally:
+            self._login_happening = False
+            async with self._condition:
+                self._condition.notify_all()
             self._log_request_response(request, response)
+
 
     async def query(self,
         module: str,
@@ -62,7 +61,7 @@ class AsyncMonitorClient(BaseMonitorClient):
         select: str | None = None,
         expand: str | None = None,
         orderby: str | None = None,
-        top: str | None = None,
+        top: int | None = None,
         skip: str | None = None
     ) -> Any:
         request = self._create_query_request(module, entity, id, language, filter, select, expand, orderby, top, skip)
@@ -94,7 +93,7 @@ class AsyncMonitorClient(BaseMonitorClient):
         language: str | None = None
     ) -> Any:
         request = self._create_batch_request(commands, language)
-        response = self._handle_request(request)
+        response = await self._handle_request(request)
         if self._needs_retry(response):
             await self.login()
             response = await self._handle_request(request)
