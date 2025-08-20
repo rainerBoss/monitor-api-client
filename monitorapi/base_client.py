@@ -236,10 +236,6 @@ class BaseClient(ABC):
         Method for calling API command interface.
         Commands are sent to the API using HTTP POST requests.
         Commands interact with the business domain of the Monitor ERP system.
-        Parameters:
-            module:
-        Returns:
-            Any:  
         Raises:
             RequestError and subtypes
             GeneralError and subtypes

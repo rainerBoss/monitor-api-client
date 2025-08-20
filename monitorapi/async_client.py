@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 class AsyncClient(BaseClient):
 
-    def __init__(self, company_number, username, password, base_url, language_code = "en", api_version = "v1", x_monitor_session_id = None, timeout = 10):
+    def __init__(self, company_number, username, password, base_url, language_code = "en", api_version = "v1", x_monitor_session_id = None, timeout = 10) -> None:
         super().__init__(company_number, username, password, base_url, language_code, api_version, x_monitor_session_id, timeout)
         self.client = httpx.AsyncClient(timeout=timeout, verify=False)
         self._condition = asyncio.Condition()
