@@ -16,13 +16,18 @@ class SyncClient(BaseClient):
         self.client = httpx.Client(timeout=timeout, verify=False)
         self._login_happening = False
 
-    def _handle_request(self, request: httpx.Request) -> httpx.Response:
+    def _make_api_request(self, request: httpx.Request) -> httpx.Response:
         while self._login_happening:
             time.sleep(0.01)
         try:
             response = None
             request = self._refresh_auth_header(request)
             response = self.client.send(request)
+
+            if self._needs_retry(response):
+                self.login()
+                response = self.client.send(request)
+
             return response
         except httpx.HTTPError as e:
             http_error = e.__doc__.strip() if e.__doc__ else e.__class__.__name__
@@ -41,8 +46,6 @@ class SyncClient(BaseClient):
             except httpx.HTTPError as e:
                 http_error = e.__doc__.strip() if e.__doc__ else e.__class__.__name__
                 raise exc.RequestError(http_error)
-        except Exception as e:
-            raise e
         finally:
             self._log_request_response(request, response)
             self._login_happening = False
@@ -60,10 +63,7 @@ class SyncClient(BaseClient):
         skip: str | None = None
     ) -> Any:
         request = self._create_query_request(module, entity, id, language, filter, select, expand, orderby, top, skip)
-        response = self._handle_request(request)
-        if self._needs_retry(response):
-            self.login()
-            response = self._handle_request(request)
+        response = self._make_api_request(request)
         return self._handle_query_response(response)
 
     def command(self,
@@ -77,10 +77,7 @@ class SyncClient(BaseClient):
         body: Any | None = None
     ) -> Any:
         request = self._create_command_request(module, namespace, command, body, many, simulate, validate, language)
-        response = self._handle_request(request)
-        if self._needs_retry(response):
-            self.login()
-            response = self._handle_request(request)
+        response = self._make_api_request(request)
         return self._handle_command_response(response)
 
     def batch(self,
@@ -88,8 +85,5 @@ class SyncClient(BaseClient):
         language: str | None = None
     ) -> Any:
         request = self._create_batch_request(commands, language)
-        response = self._handle_request(request)
-        if self._needs_retry(response):
-            self.login()
-            response = self._handle_request(request)
+        response = self._make_api_request(request)
         return self._handle_batch_command_response(response)

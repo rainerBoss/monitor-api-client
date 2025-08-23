@@ -17,7 +17,7 @@ class AsyncClient(BaseClient):
         self._condition = asyncio.Condition()
         self._login_happening = False
 
-    async def _handle_request(self, request: httpx.Request) -> httpx.Response:
+    async def _make_api_request(self, request: httpx.Request) -> httpx.Response:
         async with self._condition:
             while self._login_happening:
                 await self._condition.wait()
@@ -25,6 +25,11 @@ class AsyncClient(BaseClient):
             response = None
             request = self._refresh_auth_header(request)
             response = await self.client.send(request)
+
+            if self._needs_retry(response):
+                await self.login()
+                response = await self.client.send(request)
+            
             return response
         except httpx.HTTPError as e:
             http_error = e.__doc__.strip() if e.__doc__ else e.__class__.__name__
@@ -43,14 +48,11 @@ class AsyncClient(BaseClient):
             except httpx.HTTPError as e:
                 http_error = e.__doc__.strip() if e.__doc__ else e.__class__.__name__
                 raise exc.RequestError(http_error)
-        except Exception as e:
-            raise e
         finally:
             self._login_happening = False
             async with self._condition:
                 self._condition.notify_all()
             self._log_request_response(request, response)
-
 
     async def query(self,
         module: str,
@@ -65,10 +67,7 @@ class AsyncClient(BaseClient):
         skip: str | None = None
     ) -> Any:
         request = self._create_query_request(module, entity, id, language, filter, select, expand, orderby, top, skip)
-        response = await self._handle_request(request)
-        if self._needs_retry(response):
-            await self.login()
-            response = await self._handle_request(request)
+        response = await self._make_api_request(request)
         return self._handle_query_response(response)
 
     async def command(self,
@@ -82,10 +81,7 @@ class AsyncClient(BaseClient):
         body: Any | None = None
     ) -> Any:
         request = self._create_command_request(module, namespace, command, body, many, simulate, validate, language)
-        response = await self._handle_request(request)
-        if self._needs_retry(response):
-            await self.login()
-            response = await self._handle_request(request)
+        response = await self._make_api_request(request)
         return self._handle_command_response(response)
 
     async def batch(self,
@@ -93,8 +89,5 @@ class AsyncClient(BaseClient):
         language: str | None = None
     ) -> Any:
         request = self._create_batch_request(commands, language)
-        response = await self._handle_request(request)
-        if self._needs_retry(response):
-            await self.login()
-            response = await self._handle_request(request)
+        response = await self._make_api_request(request)
         return self._handle_batch_command_response(response)
