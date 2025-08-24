@@ -276,17 +276,25 @@ class BaseClient(ABC):
 
     def _create_batch_request(self,
         commands: list[BatchCommandEntity],
-        language: str | None = None
+        simulate: bool = False,
+        validate: bool = False,
+        language: str | None = None,
     ) -> Any:
         if not language:
             language = self.language_code
 
+        sim_or_val = ""
+        if simulate is True:
+            sim_or_val = "/Simulate"
+        if validate is True:
+            sim_or_val = "/Validate"
+        
         request = httpx.Request(
             method="POST",
             headers={
                 X_MONITOR_SESSION_ID_HEADER: self.x_monitor_session_id
             },
-            url=f"{self.base_url}/{language}/{self.company_number}/api/{self.api_version}/Batch",
+            url=f"{self.base_url}/{language}/{self.company_number}/api/{self.api_version}/Batch{sim_or_val}",
             json=commands,
         )
         return request
@@ -295,9 +303,11 @@ class BaseClient(ABC):
     @abstractmethod
     def batch(self,
         commands: list[BatchCommandEntity],
+        simulate: bool = False,
+        validate: bool = False,
         language: str | None = None
     ) -> Any: pass
-
+    
     def _handle_batch_command_response(self, response: httpx.Response) -> Any:
         if response.is_success:
             batch_response = response.json()

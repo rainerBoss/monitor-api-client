@@ -86,8 +86,10 @@ class AsyncClient(BaseClient):
 
     async def batch(self,
         commands: list[BatchCommandEntity],
+        simulate: bool = False,
+        validate: bool = False,
         language: str | None = None
     ) -> Any:
-        request = self._create_batch_request(commands, language)
+        request = self._create_batch_request(commands, simulate, validate, language)
         response = await self._make_api_request(request)
         return self._handle_batch_command_response(response)
