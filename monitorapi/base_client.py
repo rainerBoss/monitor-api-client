@@ -84,12 +84,18 @@ class BaseClient(ABC):
     def login(self) -> None:
         """
         Calls login endpoint and updates the X-Monitor-SessionId.
+
         Raises:
-            RequestError and subtypes
-            AuthError and subtypes
+            RequestError and subtypes.
+            AuthError and subtypes.
         """
 
     def _general_error_response_handler(self, response: httpx.Response) -> httpx.Response:
+        """
+        Check if response contains any documented general errors.
+        These are not specific to Queries or Commands.
+        Returns the response back for further handling if no error matched.
+        """
         if response.status_code == 401:
             raise exc.InvalidSessionId(response.text)
         if response.status_code == 403:
@@ -164,9 +170,10 @@ class BaseClient(ABC):
         skip: str | None = None
     ) -> Any:
         """
-        Method for calling API query interface.
+        Calls MonitorERP API query interface.
         Queries are sent to the API using HTTP GET requests with query parameters that manipulate the way data is fetched and returned.
-        They bypass the business domain providing very fast read access of the persistent data of the Monitor ERP system.
+        They bypass the business domain providing very fast read access of the persistent data of the MonitorERP system.
+        
         Raises:
             RequestError and subtypes
             GeneralError and subtypes
@@ -233,9 +240,10 @@ class BaseClient(ABC):
         body: Any | None = None
     ) -> Any:
         """
-        Method for calling API command interface.
+        Calls MonitorERP API command interface.
         Commands are sent to the API using HTTP POST requests.
-        Commands interact with the business domain of the Monitor ERP system.
+        Commands interact with the business domain of the MonitorERP system.
+
         Raises:
             RequestError and subtypes
             GeneralError and subtypes
@@ -285,4 +293,13 @@ class BaseClient(ABC):
     ) -> Any: pass
 
     def _handle_batch_command_response(self, response: httpx.Response) -> Any:
-        return self._handle_command_response(response)
+        if response.is_success:
+            batch_response = response.json()
+            if batch_response["IsSuccessful"]:
+                return batch_response["Response"]
+            else:
+                failing_index = batch_response["FailingIndex"]
+                error_message = batch_response["ErrorMessage"]
+                raise exc.BatchCommandError(f"At index {failing_index}: {error_message}")
+        else:
+            return self._handle_command_response(response)
