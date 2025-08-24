@@ -1,13 +1,19 @@
 import httpx
 import logging
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, TypedDict
 from .import exceptions as exc
 
 
 logger = logging.getLogger(__name__)
 
 X_MONITOR_SESSION_ID_HEADER = "x-monitor-sessionid"
+
+class BatchCommandEntity(TypedDict):
+    Path: str
+    Body: Any
+    ForwardPropertyName: str
+    ReceivingPropertyName: str
 
 class BaseClient(ABC):
 
@@ -217,7 +223,6 @@ class BaseClient(ABC):
         if many is True:
             _many = "/Many"
         
-
         request = httpx.Request(
             method="POST",
             headers={
@@ -270,7 +275,7 @@ class BaseClient(ABC):
             raise exc.CommandError(response.text)
 
     def _create_batch_request(self,
-        commands: list[dict[str, Any]],
+        commands: list[BatchCommandEntity],
         language: str | None = None
     ) -> Any:
         if not language:
@@ -286,9 +291,10 @@ class BaseClient(ABC):
         )
         return request
     
+
     @abstractmethod
     def batch(self,
-        commands: list[dict[str, Any]],
+        commands: list[BatchCommandEntity],
         language: str | None = None
     ) -> Any: pass
 

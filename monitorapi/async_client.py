@@ -3,7 +3,7 @@ import logging
 import asyncio
 from typing import Any
 
-from .base_client import BaseClient
+from .base_client import BaseClient, BatchCommandEntity
 from .import exceptions as exc
 
 
@@ -85,7 +85,7 @@ class AsyncClient(BaseClient):
         return self._handle_command_response(response)
 
     async def batch(self,
-        commands: list[dict[str, Any]],
+        commands: list[BatchCommandEntity],
         language: str | None = None
     ) -> Any:
         request = self._create_batch_request(commands, language)
