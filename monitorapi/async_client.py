@@ -28,6 +28,7 @@ class AsyncClient(BaseClient):
 
             if self._needs_retry(response):
                 await self.login()
+                request = self._refresh_auth_header(request)
                 response = await self.client.send(request)
             
             return response
@@ -64,7 +65,7 @@ class AsyncClient(BaseClient):
         expand: str | None = None,
         orderby: str | None = None,
         top: int | None = None,
-        skip: str | None = None
+        skip: int | None = None
     ) -> Any:
         request = self._create_query_request(module, entity, id, language, filter, select, expand, orderby, top, skip)
         response = await self._make_api_request(request)
@@ -88,8 +89,9 @@ class AsyncClient(BaseClient):
         commands: list[BatchCommandEntity],
         simulate: bool = False,
         validate: bool = False,
-        language: str | None = None
+        language: str | None = None,
+        raise_on_error: bool = False,
     ) -> Any:
         request = self._create_batch_request(commands, simulate, validate, language)
         response = await self._make_api_request(request)
-        return self._handle_batch_command_response(response)
+        return self._handle_batch_command_response(response, raise_on_error)

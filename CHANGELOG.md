@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0] - 29.08.2025
+
+### Added
+
+- Sumulate/Validate to batch command
+- Type for batch command using TypedDict
+- Optional boolean param for batch raise_on_error which will raise BatchCommandError if IsSuccessful field is False
+
+### Changed
+
+- Refactored retry logic. new method _make_api_request will handle both calling Query/Command API and doing retry
+
 ## [0.2.1] - 21.08.2025
 
 ### Fixed

@@ -12,8 +12,8 @@ X_MONITOR_SESSION_ID_HEADER = "x-monitor-sessionid"
 class BatchCommandEntity(TypedDict):
     Path: str
     Body: Any
-    ForwardPropertyName: str
-    ReceivingPropertyName: str
+    ForwardPropertyName: str | None
+    ReceivingPropertyName: str | None
 
 class BaseClient(ABC):
 
@@ -128,7 +128,7 @@ class BaseClient(ABC):
         expand: str | None = None,
         orderby: str | None = None,
         top: int | None = None,
-        skip: str | None = None
+        skip: int | None = None
     ) -> httpx.Request:
         if not language:
             language = self.language_code
@@ -150,7 +150,7 @@ class BaseClient(ABC):
         if top is not None:
             params["$top"] = str(top)
         if skip is not None:
-            params["$skip"] = skip
+            params["$skip"] = str(skip)
 
         request = httpx.Request(
             method="GET",
@@ -173,7 +173,7 @@ class BaseClient(ABC):
         expand: str | None = None,
         orderby: str | None = None,
         top: int | None = None,
-        skip: str | None = None
+        skip: int | None = None
     ) -> Any:
         """
         Calls MonitorERP API query interface.
@@ -305,17 +305,18 @@ class BaseClient(ABC):
         commands: list[BatchCommandEntity],
         simulate: bool = False,
         validate: bool = False,
-        language: str | None = None
+        language: str | None = None,
+        raise_on_error: bool = False,
     ) -> Any: pass
     
-    def _handle_batch_command_response(self, response: httpx.Response) -> Any:
+    def _handle_batch_command_response(self, response: httpx.Response, raise_on_error: bool) -> Any:
         if response.is_success:
             batch_response = response.json()
-            if batch_response["IsSuccessful"]:
-                return batch_response["Response"]
-            else:
-                failing_index = batch_response["FailingIndex"]
+            if "IsSuccessful" in batch_response and not batch_response["IsSuccessful"] and raise_on_error:
                 error_message = batch_response["ErrorMessage"]
+                failing_index = batch_response["FailingIndex"]
                 raise exc.BatchCommandError(f"At index {failing_index}: {error_message}")
+            else:
+                return batch_response
         else:
             return self._handle_command_response(response)

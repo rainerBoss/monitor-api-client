@@ -24,11 +24,18 @@ def example() -> None:
         password=os.environ["API_PASSWORD"],
         base_url=os.environ["API_BASE_URL"],
     )
-    r = client.query(
+    product_records = client.command(
         module="Inventory",
-        entity="Parts",
-        id=1,
+        namespace="ProductRecords",
+        command="GetProductRecords",
+        body={
+            "PartId": 100,
+            "WarehouseId": 1,
+            "HasBalance": False,
+            "ChargeNumber": None
+        },
+        simulate=True,
     )
-    print(r)
+    print(product_records)
 
 example()
